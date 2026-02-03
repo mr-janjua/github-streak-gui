@@ -1,0 +1,43 @@
+# Virtual Environment
+myenv/
+venv/
+ENV/
+env/
+
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+*.egg-info/
+*.egg
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Application specific
+*.log
+*.pid
+*.tmp
+
+# Local configuration
+.env
+config.local.py
