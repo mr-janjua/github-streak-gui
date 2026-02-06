@@ -64,10 +64,10 @@ class GitHubStreakGUI:
         self.card_bg = (22, 11, 32, 255)
 
         self.headLine = (255, 255, 255, 255)
-        self.buttonAccent = (180, 60, 60, 255)
-        self.buttonAccentSecondary = (100, 100, 100, 255)
-        self.buttonAccentHover = (220, 70, 70, 255)
-        self.buttonAccentSecondaryHover = (130, 130, 130, 255)
+        self.buttonAccent = (2, 44, 114, 255)
+        self.buttonAccentSecondary = (81, 0, 95, 255)
+        self.buttonAccentHover = (0, 66, 175, 255)
+        self.buttonAccentSecondaryHover = (121, 0, 142, 255)
 
         # Setup themes
         self.create_themes()
