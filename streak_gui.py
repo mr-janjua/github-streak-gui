@@ -619,6 +619,7 @@ class GitHubStreakGUI:
             self.log(f"⚠️ NO ACTIVITY TODAY - {reminder}")
             if dpg.does_item_exist("status_message"):
                 dpg.set_value("status_message", "⚠️ No activity today!")
+                dpg.bind_item_font("status_message", self.title_font)
                 dpg.bind_item_theme("status_message", self.warning_theme)
             self.send_notification("GitHub Streak Reminder", reminder)
         
