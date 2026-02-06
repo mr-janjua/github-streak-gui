@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+import dearpygui.dearpygui as dpg
 import json
 import requests
 from datetime import datetime, timedelta
 from pathlib import Path
 import threading
 import time
-import sys
-import os
 
 try:
     from plyer import notification
@@ -18,233 +15,402 @@ except ImportError:
     NOTIFICATIONS_AVAILABLE = False
 
 class GitHubStreakGUI:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("GitHub Streak Tracker")
-        self.root.geometry("800x600")
-        self.root.resizable(True, True)
-        
+    def __init__(self):
         self.config_dir = Path.home() / ".github_streak"
         self.config_file = self.config_dir / "config.json"
         self.streak_file = self.config_dir / "streak.json"
         self.config_dir.mkdir(exist_ok=True)
         
-        self.username = tk.StringVar()
-        self.token = tk.StringVar()
-        self.reminder_mode = tk.StringVar(value="normal")
-        self.auto_start = tk.BooleanVar(value=True)
+        self.username = ""
+        self.token = ""
+        self.reminder_mode = "normal"
+        self.auto_start = True
         
         self.streak_data = self.load_streak_data()
         self.is_running = False
         self.check_thread = None
         
-        self.setup_ui()
         self.load_config()
         
-        if self.username.get() and self.token.get():
-            self.show_main_view()
-        else:
-            self.show_setup_view()
+        # Animation values
+        self.current_streak_animated = 0
+        self.longest_streak_animated = 0
+        self.total_days_animated = 0
+        
+        self.setup_dpg()
     
-    def setup_ui(self):
-        style = ttk.Style()
-        style.theme_use('clam')
+    def setup_dpg(self):
+        dpg.create_context()
         
-        # Color palette
-        bg_color = "#1e1e2e"      # Dark background
-        fg_color = "#dbdbdb"      # Light foreground
-        accent_color = "#ff6b6b"   # Red accent
-        secondary_color = "#4ecdc4" # Teal accent
+        # Load default font with larger size for stats
+        with dpg.font_registry():
+            self.default_font = dpg.add_font("fonts/Roboto-Black.ttf", 13)
+            self.large_font = dpg.add_font("fonts/Roboto-Bold.ttf", 48)
+            self.title_font = dpg.add_font("fonts/Roboto-Black.ttf", 32)
+            self.stat_font = dpg.add_font("fonts/Roboto-Black.ttf", 38)
+            self.medium_font = dpg.add_font("fonts/Roboto-Black.ttf", 20)
+            # Font used for status messages (success/warning). Adjust size here.
+            self.status_font = dpg.add_font("fonts/Roboto-Black.ttf", 16)
         
-        # Configure root window
-        self.root.configure(bg=bg_color)
+        # Color palette - Darker shades
+        self.bg_color = (30, 30, 46, 255)
+        self.fg_color = (219, 219, 219, 255)
+        self.accent_color = (200, 60, 60, 255)  # Darker red
+        self.secondary_color = (50, 155, 148, 255)  # Darker teal
+        self.success_color = (46, 204, 113, 255)
+        self.warning_color = (231, 76, 60, 255)
+        self.card_bg = (42, 42, 62, 255)
         
-        # Configure ttk styles
-        style.configure('TFrame', background=bg_color)
-        style.configure('TLabel', background=bg_color, foreground=fg_color)
-        style.configure('TButton', background=accent_color, foreground=fg_color)
-        style.configure('TLabelframe', background=bg_color, foreground=fg_color)
-        style.configure('TLabelframe.Label', background=bg_color, foreground=fg_color)
-        style.configure('TEntry', fieldbackground="#2a2a3e", foreground=fg_color)
-        style.configure('TRadiobutton', background=bg_color, foreground=fg_color)
+        # Setup themes
+        self.create_themes()
         
-        # Custom label styles
-        style.configure('Title.TLabel', font=('Segoe UI', 28, 'bold'), 
-                       background=bg_color, foreground=accent_color)
-        style.configure('Stat.TLabel', font=('Segoe UI', 40, 'bold'), 
-                       background=bg_color, foreground=secondary_color)
-        style.configure('StatLabel.TLabel', font=('Segoe UI', 13), 
-                       background=bg_color, foreground=fg_color)
-        style.configure('Success.TLabel', foreground='#2ecc71', font=('Segoe UI', 14, 'bold'),
-                       background=bg_color)
-        style.configure('Warning.TLabel', foreground='#e74c3c', font=('Segoe UI', 14, 'bold'),
-                       background=bg_color)
+        # Create main window
+        with dpg.window(tag="main_window", label="GitHub Streak Tracker", 
+                       width=900, height=620, no_close=True):
+            
+            if self.username and self.token:
+                self.show_main_view()
+            else:
+                self.show_setup_view()
         
-        # Button styling
-        style.map('TButton',
-                 background=[('active', '#ff5252'), ('pressed', '#ff3333')],
-                 foreground=[('active', '#ffffff')])
+        # Setup viewport
+        dpg.create_viewport(title="🔥 GitHub Streak Tracker", width=920, height=640)
+        dpg.setup_dearpygui()
+        dpg.show_viewport()
+        dpg.set_primary_window("main_window", True)
         
-        # Stats frame styling with colored border
-        style.configure('Stats.TLabelframe', background=bg_color, foreground=accent_color,
-                       bordercolor=secondary_color, borderwidth=2, relief='solid')
-        style.configure('Stats.TLabelframe.Label', background=bg_color, foreground=accent_color,
-                       font=('Segoe UI', 12, 'bold'))
+        # Apply global theme
+        dpg.bind_theme(self.global_theme)
         
-        self.main_frame = ttk.Frame(self.root, padding="20")
-        self.main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
-        self.main_frame.columnconfigure(0, weight=1)
-        self.main_frame.rowconfigure(1, weight=1)
+        # Auto-start if configured
+        if self.auto_start and self.username and self.token:
+            dpg.set_frame_callback(5, self.start_monitoring)
     
-    def clear_frame(self):
-        for widget in self.main_frame.winfo_children():
-            widget.destroy()
+    def create_themes(self):
+        # Global theme
+        with dpg.theme() as self.global_theme:
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_color(dpg.mvThemeCol_WindowBg, self.bg_color, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ChildBg, self.card_bg, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_Text, self.fg_color, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBg, self.card_bg, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 8, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 12, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 0, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 10, 8, category=dpg.mvThemeCat_Core)
+        
+        # Button theme (accent color) - Darker
+        with dpg.theme() as self.button_theme:
+            with dpg.theme_component(dpg.mvButton):
+                dpg.add_theme_color(dpg.mvThemeCol_Button, self.accent_color, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (220, 70, 70, 255), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (180, 50, 50, 255), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 5, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 20, 12, category=dpg.mvThemeCat_Core)
+        
+        # Secondary button theme - Darker
+        with dpg.theme() as self.secondary_button_theme:
+            with dpg.theme_component(dpg.mvButton):
+                dpg.add_theme_color(dpg.mvThemeCol_Button, self.secondary_color, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (65, 175, 168, 255), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (40, 135, 128, 255), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 5, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 20, 12, category=dpg.mvThemeCat_Core)
+        
+        # Success theme
+        with dpg.theme() as self.success_theme:
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, self.success_color, category=dpg.mvThemeCat_Core)
+                
+        
+        # Warning theme
+        with dpg.theme() as self.warning_theme:
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, self.warning_color, category=dpg.mvThemeCat_Core)
+        
+        # Input theme
+        with dpg.theme() as self.input_theme:
+            with dpg.theme_component(dpg.mvInputText):
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (42, 42, 62, 255), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, (52, 52, 72, 255), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 8, category=dpg.mvThemeCat_Core)
+        
+        # Card theme
+        with dpg.theme() as self.card_theme:
+            with dpg.theme_component(dpg.mvChildWindow):
+                dpg.add_theme_color(dpg.mvThemeCol_ChildBg, self.card_bg, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_Border, self.secondary_color, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 4, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_ChildBorderSize, 2, category=dpg.mvThemeCat_Core)
+    
+    def clear_window(self):
+        dpg.delete_item("main_window", children_only=True)
     
     def show_setup_view(self):
-        self.clear_frame()
+        self.clear_window()
         
-        ttk.Label(self.main_frame, text="🔥 GitHub Streak Tracker", 
-                 style='Title.TLabel').grid(row=0, column=0, columnspan=2, pady=20)
-        
-        ttk.Label(self.main_frame, text="Setup", 
-                 font=('Arial', 16, 'bold')).grid(row=1, column=0, columnspan=2, pady=10)
-        
-        ttk.Label(self.main_frame, text="GitHub Username:").grid(row=2, column=0, sticky=tk.W, pady=5)
-        username_entry = ttk.Entry(self.main_frame, textvariable=self.username, width=40)
-        username_entry.grid(row=2, column=1, pady=5, padx=5)
-        
-        ttk.Label(self.main_frame, text="Personal Access Token:").grid(row=3, column=0, sticky=tk.W, pady=5)
-        token_entry = ttk.Entry(self.main_frame, textvariable=self.token, width=40, show="*")
-        token_entry.grid(row=3, column=1, pady=5, padx=5)
-        
-        ttk.Label(self.main_frame, text="Get token from: https://github.com/settings/tokens",
-                 foreground='blue', cursor='hand2').grid(row=4, column=0, columnspan=2, pady=5)
-        
-        ttk.Label(self.main_frame, text="Reminder Mode:").grid(row=5, column=0, sticky=tk.W, pady=5)
-        mode_frame = ttk.Frame(self.main_frame)
-        mode_frame.grid(row=5, column=1, sticky=tk.W, pady=5)
-        ttk.Radiobutton(mode_frame, text="Normal (Friendly)", variable=self.reminder_mode, 
-                       value="normal").pack(side=tk.LEFT, padx=5)
-        ttk.Radiobutton(mode_frame, text="Strict (Duolingo Mode)", variable=self.reminder_mode, 
-                       value="strict").pack(side=tk.LEFT, padx=5)
-        
-        button_frame = ttk.Frame(self.main_frame)
-        button_frame.grid(row=6, column=0, columnspan=2, pady=30)
-        
-        ttk.Button(button_frame, text="Save & Continue", 
-                  command=self.save_and_continue).pack(side=tk.LEFT, padx=5)
-        
-        if self.config_file.exists():
-            ttk.Button(button_frame, text="Back to Dashboard", 
-                      command=self.show_main_view).pack(side=tk.LEFT, padx=5)
+        with dpg.group(parent="main_window"):
+            dpg.add_spacer(height=30)
+            
+            # Title
+            title_text = dpg.add_text("🔥 GitHub Streak Tracker", 
+                        color=self.accent_color)
+            dpg.bind_item_font(title_text, self.title_font)
+            
+            dpg.add_spacer(height=20)
+            setup_text = dpg.add_text("Setup", color=self.fg_color)
+            dpg.bind_item_font(setup_text, self.medium_font)
+            
+            dpg.add_spacer(height=30)
+            
+            # Setup form
+            with dpg.group(horizontal=True):
+                dpg.add_text("GitHub Username:", color=self.fg_color)
+                dpg.add_spacer(width=20)
+                dpg.add_input_text(tag="username_input", default_value=self.username, 
+                                 width=400, hint="your-github-username")
+                dpg.bind_item_theme(dpg.last_item(), self.input_theme)
+            
+            dpg.add_spacer(height=15)
+            
+            with dpg.group(horizontal=True):
+                dpg.add_text("Access Token:     ", color=self.fg_color)
+                dpg.add_spacer(width=20)
+                dpg.add_input_text(tag="token_input", default_value=self.token, 
+                                 width=400, password=True, hint="ghp_...")
+                dpg.bind_item_theme(dpg.last_item(), self.input_theme)
+            
+            dpg.add_spacer(height=10)
+            dpg.add_text("Get token from: https://github.com/settings/tokens", 
+                        color=self.secondary_color)
+            
+            dpg.add_spacer(height=25)
+            
+            with dpg.group(horizontal=True):
+                dpg.add_text("Reminder Mode:", color=self.fg_color)
+                dpg.add_spacer(width=20)
+                dpg.add_radio_button(items=["Normal (Friendly)", "Strict (Duolingo Mode)"], 
+                                   tag="reminder_mode_radio",
+                                   default_value="Normal (Friendly)" if self.reminder_mode == "normal" else "Strict (Duolingo Mode)",
+                                   horizontal=True)
+            
+            dpg.add_spacer(height=40)
+            
+            # Buttons
+            with dpg.group(horizontal=True):
+                dpg.add_spacer(width=250)
+                btn = dpg.add_button(label="Save & Continue", width=200, height=45,
+                                   callback=self.save_and_continue)
+                dpg.bind_item_theme(btn, self.button_theme)
+                
+                if self.config_file.exists():
+                    dpg.add_spacer(width=20)
+                    btn2 = dpg.add_button(label="Back to Dashboard", width=200, height=45,
+                                        callback=self.show_main_view)
+                    dpg.bind_item_theme(btn2, self.secondary_button_theme)
     
     def show_main_view(self):
-        self.clear_frame()
+        self.clear_window()
         
-        header = ttk.Frame(self.main_frame)
-        header.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=10)
+        # Save current monitoring state before rebuilding UI
+        was_running = self.is_running
         
-        ttk.Label(header, text="🔥 GitHub Streak Tracker", 
-                 style='Title.TLabel').pack(side=tk.LEFT)
+        with dpg.group(parent="main_window"):
+            dpg.add_spacer(height=10)
+            
+            # Header
+            with dpg.group(horizontal=True):
+                header_text = dpg.add_text("🔥 GitHub Streak Tracker", color=self.accent_color)
+                dpg.bind_item_font(header_text, self.title_font)
+                
+                dpg.add_spacer(width=100)
+                
+                btn = dpg.add_button(label="📊 Check Now", width=140, height=40,
+                                   callback=lambda: threading.Thread(target=self.manual_check, daemon=True).start())
+                dpg.bind_item_theme(btn, self.secondary_button_theme)
+                
+                dpg.add_spacer(width=10)
+                
+                btn2 = dpg.add_button(label="⚙️ Settings", width=140, height=40,
+                                    callback=self.show_setup_view)
+                dpg.bind_item_theme(btn2, self.button_theme)
+            
+            dpg.add_spacer(height=15)
+            
+            # Stats cards
+            with dpg.child_window(height=180, border=True, tag="stats_container"):
+                dpg.bind_item_theme("stats_container", self.card_theme)
+                
+                dpg.add_spacer(height=10)
+                
+                with dpg.group(horizontal=True):
+                    dpg.add_spacer(width=20)
+                    
+                    # Current Streak
+                    with dpg.group():
+                        label1 = dpg.add_text("Current Streak", color=self.fg_color)
+                        dpg.bind_item_font(label1, self.stat_font)
+                        dpg.add_spacer(height=2)
+                        streak_text = dpg.add_text(str(self.streak_data['current_streak']), tag="current_streak_display", color=(231, 76, 60, 255))
+                        dpg.bind_item_font(streak_text, self.large_font)
+                        # days_label = dpg.add_text("days 🔥", color=self.fg_color)
+                        # dpg.bind_item_font(days_label, self.medium_font)
+                    
+                    dpg.add_spacer(width=80)
+                    
+                    # Longest Streak
+                    with dpg.group():
+                        label2 = dpg.add_text("Longest Streak", color=self.fg_color)
+                        dpg.bind_item_font(label2, self.stat_font)
+                        dpg.add_spacer(height=2)
+                        longest_text = dpg.add_text(str(self.streak_data['longest_streak']), tag="longest_streak_display", color=(243, 156, 18, 255))
+                        dpg.bind_item_font(longest_text, self.large_font)
+                        # days_label = dpg.add_text("days 🏆", color=self.fg_color)
+                        # dpg.bind_item_font(days_label, self.medium_font)
+                    
+                    dpg.add_spacer(width=80)
+                    
+                    # Total Days
+                    with dpg.group():
+                        label3 = dpg.add_text("Total Days", color=self.fg_color)
+                        dpg.bind_item_font(label3, self.stat_font)
+                        dpg.add_spacer(height=2)
+                        total_text = dpg.add_text(str(self.streak_data['total_days']), tag="total_days_display", color=(52, 152, 219, 255))
+                        dpg.bind_item_font(total_text, self.large_font)
+                        # days_label = dpg.add_text("days 💎", color=self.fg_color)
+                        # dpg.bind_item_font(days_label, self.medium_font)
+                
+                dpg.add_spacer(height=10)
+                
+                # Info
+                with dpg.group(horizontal=True):
+                    dpg.add_spacer(width=30)
+                    with dpg.group():
+                        last_commit = self.streak_data.get('last_commit_date', 'Never')
+                        dpg.add_text(f"Last Commit: {last_commit}", tag="last_commit_text", color=self.fg_color)
+                        dpg.bind_item_font("last_commit_text", self.medium_font)
+                        dpg.add_text(f"Mode: {self.reminder_mode.upper()}", tag="mode_text", color=self.fg_color)
+                        dpg.bind_item_font("mode_text", self.medium_font)
+                        dpg.add_text(f"Username: {self.username}", tag="username_text", color=self.fg_color)
+                        dpg.bind_item_font("username_text", self.medium_font)
+            
+            dpg.add_spacer(height=10)
+            
+            # Status message
+            dpg.add_text("", tag="status_message")
+            
+            dpg.add_spacer(height=10)
+            
+            # Activity log
+            with dpg.child_window(height=180, border=True):
+                log_title = dpg.add_text("Activity Log", color=self.secondary_color)
+                dpg.bind_item_font(log_title, self.medium_font)
+                dpg.add_separator()
+                dpg.add_spacer(height=3)
+                
+                with dpg.child_window(tag="log_container", border=False, height=130):
+                    pass
+            
+            dpg.add_spacer(height=15)
+            
+            # Control buttons - Set initial state based on monitoring status
+            with dpg.group(horizontal=True):
+                dpg.add_spacer(width=250)
+                
+                btn = dpg.add_button(label="▶ Start Monitoring", tag="start_button",
+                                   width=180, height=45, callback=self.start_monitoring,
+                                   enabled=not was_running)
+                dpg.bind_item_theme(btn, self.button_theme)
+                
+                dpg.add_spacer(width=20)
+                
+                btn2 = dpg.add_button(label="⏸ Stop Monitoring", tag="stop_button",
+                                    width=180, height=45, callback=self.stop_monitoring,
+                                    enabled=was_running)
+                dpg.bind_item_theme(btn2, self.secondary_button_theme)
         
-        ttk.Button(header, text="⚙️ Settings", 
-                  command=self.show_setup_view).pack(side=tk.RIGHT, padx=5)
-        ttk.Button(header, text="📊 Check Now", 
-                  command=self.manual_check).pack(side=tk.RIGHT, padx=5)
+        # Animate stats on load
+        self.animate_stats()
         
-        stats_frame = ttk.LabelFrame(self.main_frame, text="Your Stats", padding="20", style='Stats.TLabelframe')
-        stats_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=10)
-        stats_frame.columnconfigure(0, weight=1)
-        stats_frame.columnconfigure(1, weight=1)
-        stats_frame.columnconfigure(2, weight=1)
+        # Only auto-start on first load, not when returning from settings
+        if self.auto_start and not was_running and self.username and self.token:
+            dpg.set_frame_callback(10, self.start_monitoring)
+    
+    def animate_stats(self):
+        """Animate stat numbers from current to target values"""
+        # Set animation starting point to current values
+        self.current_streak_animated = self.streak_data['current_streak']
+        self.longest_streak_animated = self.streak_data['longest_streak']
+        self.total_days_animated = self.streak_data['total_days']
         
-        current_frame = ttk.Frame(stats_frame)
-        current_frame.grid(row=0, column=0, padx=20, pady=10)
-        ttk.Label(current_frame, text="Current Streak", style='StatLabel.TLabel').pack()
-        self.current_streak_label = ttk.Label(current_frame, 
-                                             text=str(self.streak_data['current_streak']), 
-                                             style='Stat.TLabel', foreground='#e74c3c')
-        self.current_streak_label.pack()
-        ttk.Label(current_frame, text="days 🔥", font=('Arial', 12)).pack()
+        target_current = self.streak_data['current_streak']
+        target_longest = self.streak_data['longest_streak']
+        target_total = self.streak_data['total_days']
         
-        longest_frame = ttk.Frame(stats_frame)
-        longest_frame.grid(row=0, column=1, padx=20, pady=10)
-        ttk.Label(longest_frame, text="Longest Streak", style='StatLabel.TLabel').pack()
-        ttk.Label(longest_frame, text=str(self.streak_data['longest_streak']), 
-                 style='Stat.TLabel', foreground='#f39c12').pack()
-        ttk.Label(longest_frame, text="days 🏆", font=('Arial', 12)).pack()
+        def animate_step():
+            speed = 0.15
+            
+            # Animate current streak
+            if self.current_streak_animated < target_current:
+                self.current_streak_animated += max(1, int((target_current - self.current_streak_animated) * speed))
+                if self.current_streak_animated > target_current:
+                    self.current_streak_animated = target_current
+            
+            # Animate longest streak
+            if self.longest_streak_animated < target_longest:
+                self.longest_streak_animated += max(1, int((target_longest - self.longest_streak_animated) * speed))
+                if self.longest_streak_animated > target_longest:
+                    self.longest_streak_animated = target_longest
+            
+            # Animate total days
+            if self.total_days_animated < target_total:
+                self.total_days_animated += max(1, int((target_total - self.total_days_animated) * speed))
+                if self.total_days_animated > target_total:
+                    self.total_days_animated = target_total
+            
+            # Update display
+            if dpg.does_item_exist("current_streak_display"):
+                dpg.set_value("current_streak_display", str(self.current_streak_animated))
+            if dpg.does_item_exist("longest_streak_display"):
+                dpg.set_value("longest_streak_display", str(self.longest_streak_animated))
+            if dpg.does_item_exist("total_days_display"):
+                dpg.set_value("total_days_display", str(self.total_days_animated))
+            
+            # Continue animation if not done
+            if (self.current_streak_animated < target_current or 
+                self.longest_streak_animated < target_longest or 
+                self.total_days_animated < target_total):
+                dpg.set_frame_callback(1, animate_step)
         
-        total_frame = ttk.Frame(stats_frame)
-        total_frame.grid(row=0, column=2, padx=20, pady=10)
-        ttk.Label(total_frame, text="Total Days", style='StatLabel.TLabel').pack()
-        ttk.Label(total_frame, text=str(self.streak_data['total_days']), 
-                 style='Stat.TLabel', foreground='#3498db').pack()
-        ttk.Label(total_frame, text="days 💎", font=('Arial', 12)).pack()
-        
-        info_frame = ttk.Frame(stats_frame)
-        info_frame.grid(row=1, column=0, columnspan=3, pady=10)
-        
-        last_commit = self.streak_data.get('last_commit_date', 'Never')
-        ttk.Label(info_frame, text=f"Last Commit: {last_commit}").pack()
-        ttk.Label(info_frame, text=f"Mode: {self.reminder_mode.get().upper()}").pack()
-        ttk.Label(info_frame, text=f"Username: {self.username.get()}").pack()
-        
-        self.status_label = ttk.Label(stats_frame, text="", font=('Arial', 14, 'bold'))
-        self.status_label.grid(row=2, column=0, columnspan=3, pady=10)
-        
-        log_frame = ttk.LabelFrame(self.main_frame, text="Activity Log", padding="10")
-        log_frame.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=10)
-        log_frame.rowconfigure(0, weight=1)
-        log_frame.columnconfigure(0, weight=1)
-        
-        self.log_text = scrolledtext.ScrolledText(log_frame, height=10, width=70, 
-                                                  state='disabled', wrap=tk.WORD,
-                                                  bg="#2a2a3e", fg="#e0e0e0",
-                                                  font=('Courier', 10),
-                                                  insertbackground="#e0e0e0")
-        self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
-        control_frame = ttk.Frame(self.main_frame)
-        control_frame.grid(row=3, column=0, pady=10)
-        
-        self.start_button = ttk.Button(control_frame, text="▶ Start Monitoring", 
-                                       command=self.start_monitoring, width=20)
-        self.start_button.pack(side=tk.LEFT, padx=5)
-        
-        self.stop_button = ttk.Button(control_frame, text="⏸ Stop Monitoring", 
-                                      command=self.stop_monitoring, width=20, state='disabled')
-        self.stop_button.pack(side=tk.LEFT, padx=5)
-        
-        self.update_stats_display()
-        
-        if self.auto_start.get():
-            self.root.after(1000, self.start_monitoring)
+        animate_step()
     
     def log(self, message):
-        self.log_text.configure(state='normal')
         timestamp = datetime.now().strftime('%H:%M:%S')
-        self.log_text.insert(tk.END, f"[{timestamp}] {message}\n")
-        self.log_text.see(tk.END)
-        self.log_text.configure(state='disabled')
+        log_message = f"[{timestamp}] {message}"
+        
+        if dpg.does_item_exist("log_container"):
+            dpg.add_text(log_message, parent="log_container", color=self.fg_color)
+            
+            # Auto-scroll to bottom
+            children = dpg.get_item_children("log_container", 1)
+            if children and len(children) > 10:
+                dpg.delete_item(children[0])
     
     def load_config(self):
         if self.config_file.exists():
             with open(self.config_file, 'r') as f:
                 config = json.load(f)
-                self.username.set(config.get('username', ''))
-                self.token.set(config.get('token', ''))
-                self.reminder_mode.set(config.get('reminder_mode', 'normal'))
-                self.auto_start.set(config.get('auto_start', True))
+                self.username = config.get('username', '')
+                self.token = config.get('token', '')
+                self.reminder_mode = config.get('reminder_mode', 'normal')
+                self.auto_start = config.get('auto_start', True)
     
     def save_config(self):
         config = {
-            'username': self.username.get(),
-            'token': self.token.get(),
-            'reminder_mode': self.reminder_mode.get(),
-            'auto_start': self.auto_start.get()
+            'username': self.username,
+            'token': self.token,
+            'reminder_mode': self.reminder_mode,
+            'auto_start': self.auto_start
         }
         with open(self.config_file, 'w') as f:
             json.dump(config, f, indent=2)
@@ -266,23 +432,50 @@ class GitHubStreakGUI:
             json.dump(self.streak_data, f, indent=2)
     
     def save_and_continue(self):
-        if not self.username.get() or not self.token.get():
-            messagebox.showerror("Error", "Please fill in all fields!")
+        username = dpg.get_value("username_input")
+        token = dpg.get_value("token_input")
+        
+        if not username or not token:
+            self.show_error_popup("Please fill in all fields!")
             return
         
+        self.username = username
+        self.token = token
+        
+        mode_value = dpg.get_value("reminder_mode_radio")
+        self.reminder_mode = "normal" if "Normal" in mode_value else "strict"
+        
         self.save_config()
-        messagebox.showinfo("Success", "Configuration saved!")
-        self.show_main_view()
+        self.show_success_popup("Configuration saved!")
+        dpg.set_frame_callback(30, self.show_main_view)
+    
+    def show_error_popup(self, message):
+        with dpg.window(label="Error", modal=True, show=True, tag="error_popup", 
+                       width=300, height=120, pos=[310, 300]):
+            dpg.add_text(message, color=self.warning_color)
+            dpg.add_spacer(height=20)
+            btn = dpg.add_button(label="OK", width=260, 
+                               callback=lambda: dpg.delete_item("error_popup"))
+            dpg.bind_item_theme(btn, self.button_theme)
+    
+    def show_success_popup(self, message):
+        with dpg.window(label="Success", modal=True, show=True, tag="success_popup", 
+                       width=300, height=120, pos=[310, 300]):
+            dpg.add_text(message, color=self.success_color)
+            dpg.add_spacer(height=20)
+            btn = dpg.add_button(label="OK", width=260, 
+                               callback=lambda: dpg.delete_item("success_popup"))
+            dpg.bind_item_theme(btn, self.secondary_button_theme)
     
     def check_github_activity(self):
         today = datetime.now().date().isoformat()
         
         headers = {
-            'Authorization': f'token {self.token.get()}',
+            'Authorization': f'token {self.token}',
             'Accept': 'application/vnd.github.v3+json'
         }
         
-        url = f'https://api.github.com/users/{self.username.get()}/events'
+        url = f'https://api.github.com/users/{self.username}/events'
         
         try:
             response = requests.get(url, headers=headers, timeout=10)
@@ -348,7 +541,7 @@ class GitHubStreakGUI:
     def get_reminder_message(self):
         streak = self.streak_data['current_streak']
         
-        if self.reminder_mode.get() == "strict":
+        if self.reminder_mode == "strict":
             messages = {
                 0: "🦉 Your streak is DEAD. Get coding NOW!",
                 1: "🔥 1 day? Pathetic. Don't break it.",
@@ -383,37 +576,46 @@ class GitHubStreakGUI:
         
         if self.streak_data['commit_history'].get(today):
             self.log("✓ Already committed today!")
-            self.status_label.configure(text="✓ Streak safe for today!", 
-                                       foreground='#2ecc71')
+            if dpg.does_item_exist("status_message"):
+                dpg.set_value("status_message", "✓ Streak safe for today!")
+                dpg.bind_item_font("status_message", self.medium_font)
             return
         
         has_activity = self.check_github_activity()
         
         if has_activity is None:
             self.log("⚠️ Could not check GitHub")
-            self.status_label.configure(text="⚠️ Connection error", 
-                                       foreground='#e74c3c')
+            if dpg.does_item_exist("status_message"):
+                dpg.set_value("status_message", "⚠️ Connection error")
+                dpg.bind_item_theme("status_message", self.warning_theme)
             return
         
         if has_activity:
             self.update_streak(True)
             self.log(f"✓ Activity detected! Streak: {self.streak_data['current_streak']} days")
-            self.status_label.configure(text=f"✓ Streak: {self.streak_data['current_streak']} days 🔥", 
-                                       foreground='#2ecc71')
+            if dpg.does_item_exist("status_message"):
+                dpg.set_value("status_message", f"✓ Streak: {self.streak_data['current_streak']} days 🔥")
+                dpg.bind_item_theme("status_message", self.success_theme)
             self.send_notification("GitHub Streak", 
                                   f"Activity detected! {self.streak_data['current_streak']} days 🔥")
         else:
             reminder = self.get_reminder_message()
             self.log(f"⚠️ NO ACTIVITY TODAY - {reminder}")
-            self.status_label.configure(text="⚠️ No activity today!", 
-                                       foreground='#e74c3c')
+            if dpg.does_item_exist("status_message"):
+                dpg.set_value("status_message", "⚠️ No activity today!")
+                dpg.bind_item_theme("status_message", self.warning_theme)
             self.send_notification("GitHub Streak Reminder", reminder)
         
         self.update_stats_display()
     
     def update_stats_display(self):
-        if hasattr(self, 'current_streak_label'):
-            self.current_streak_label.configure(text=str(self.streak_data['current_streak']))
+        """Update stats with animation"""
+        self.animate_stats()
+        
+        if dpg.does_item_exist("last_commit_text"):
+            last_commit = self.streak_data.get('last_commit_date', 'Never')
+            dpg.set_value("last_commit_text", f"Last Commit: {last_commit}")
+            
     
     def monitoring_loop(self):
         check_times = ["09:00", "14:00", "20:00"]
@@ -428,7 +630,7 @@ class GitHubStreakGUI:
                 last_check_date = current_date
                 
                 if current_time in check_times:
-                    self.root.after(0, self.manual_check)
+                    self.manual_check()
                     time.sleep(65)
             
             time.sleep(30)
@@ -438,8 +640,11 @@ class GitHubStreakGUI:
             return
         
         self.is_running = True
-        self.start_button.configure(state='disabled')
-        self.stop_button.configure(state='normal')
+        
+        if dpg.does_item_exist("start_button"):
+            dpg.configure_item("start_button", enabled=False)
+        if dpg.does_item_exist("stop_button"):
+            dpg.configure_item("stop_button", enabled=True)
         
         self.log("🔥 Monitoring started")
         self.log("Checks at: 9:00 AM, 2:00 PM, 8:00 PM")
@@ -447,23 +652,28 @@ class GitHubStreakGUI:
         self.check_thread = threading.Thread(target=self.monitoring_loop, daemon=True)
         self.check_thread.start()
         
-        self.manual_check()
+        threading.Thread(target=self.manual_check, daemon=True).start()
     
     def stop_monitoring(self):
         self.is_running = False
-        self.start_button.configure(state='normal')
-        self.stop_button.configure(state='disabled')
+        
+        if dpg.does_item_exist("start_button"):
+            dpg.configure_item("start_button", enabled=True)
+        if dpg.does_item_exist("stop_button"):
+            dpg.configure_item("stop_button", enabled=False)
+        
         self.log("⏸ Monitoring stopped")
     
-    def on_closing(self):
+    def run(self):
+        while dpg.is_dearpygui_running():
+            dpg.render_dearpygui_frame()
+        
         self.is_running = False
-        self.root.destroy()
+        dpg.destroy_context()
 
 def main():
-    root = tk.Tk()
-    app = GitHubStreakGUI(root)
-    root.protocol("WM_DELETE_WINDOW", app.on_closing)
-    root.mainloop()
+    app = GitHubStreakGUI()
+    app.run()
 
 if __name__ == "__main__":
     main()
