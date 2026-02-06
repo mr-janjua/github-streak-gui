@@ -142,6 +142,9 @@ class GitHubStreakGUI:
                 dpg.add_theme_color(dpg.mvThemeCol_Border, self.secondary_color, category=dpg.mvThemeCat_Core)
                 dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 4, category=dpg.mvThemeCat_Core)
                 dpg.add_theme_style(dpg.mvStyleVar_ChildBorderSize, 2, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 0, 0, category=dpg.mvThemeCat_Core)
+                # Aggressively reduce vertical spacing inside cards (shrink "line-height")
+                dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 0, 0, category=dpg.mvThemeCat_Core)
     
     def clear_window(self):
         dpg.delete_item("main_window", children_only=True)
@@ -238,19 +241,19 @@ class GitHubStreakGUI:
             dpg.add_spacer(height=15)
             
             # Stats cards
-            with dpg.child_window(height=180, border=True, tag="stats_container"):
+            with dpg.child_window(height=200, border=True, tag="stats_container"):
                 dpg.bind_item_theme("stats_container", self.card_theme)
                 
                 dpg.add_spacer(height=10)
                 
                 with dpg.group(horizontal=True):
-                    dpg.add_spacer(width=20)
+                    dpg.add_spacer(width=50)
                     
                     # Current Streak
                     with dpg.group():
                         label1 = dpg.add_text("Current Streak", color=self.fg_color)
                         dpg.bind_item_font(label1, self.stat_font)
-                        dpg.add_spacer(height=2)
+                        dpg.add_spacer(height=0)
                         streak_text = dpg.add_text(str(self.streak_data['current_streak']), tag="current_streak_display", color=(231, 76, 60, 255))
                         dpg.bind_item_font(streak_text, self.large_font)
                         # days_label = dpg.add_text("days 🔥", color=self.fg_color)
@@ -262,7 +265,7 @@ class GitHubStreakGUI:
                     with dpg.group():
                         label2 = dpg.add_text("Longest Streak", color=self.fg_color)
                         dpg.bind_item_font(label2, self.stat_font)
-                        dpg.add_spacer(height=2)
+                        dpg.add_spacer(height=0)
                         longest_text = dpg.add_text(str(self.streak_data['longest_streak']), tag="longest_streak_display", color=(243, 156, 18, 255))
                         dpg.bind_item_font(longest_text, self.large_font)
                         # days_label = dpg.add_text("days 🏆", color=self.fg_color)
@@ -274,7 +277,7 @@ class GitHubStreakGUI:
                     with dpg.group():
                         label3 = dpg.add_text("Total Days", color=self.fg_color)
                         dpg.bind_item_font(label3, self.stat_font)
-                        dpg.add_spacer(height=2)
+                        dpg.add_spacer(height=0)
                         total_text = dpg.add_text(str(self.streak_data['total_days']), tag="total_days_display", color=(52, 152, 219, 255))
                         dpg.bind_item_font(total_text, self.large_font)
                         # days_label = dpg.add_text("days 💎", color=self.fg_color)
