@@ -44,23 +44,31 @@ class GitHubStreakGUI:
         
         # Load default font with larger size for stats
         with dpg.font_registry():
-            self.default_font = dpg.add_font("fonts/Roboto-Black.ttf", 13)
+            self.default_font = dpg.add_font("fonts/Roboto-Black.ttf", 13, default_font=True)
             self.large_font = dpg.add_font("fonts/Roboto-Bold.ttf", 120,)
             self.title_font = dpg.add_font("fonts/Roboto-Black.ttf", 32)
             self.stat_font = dpg.add_font("fonts/Roboto-Black.ttf", 38)
+            self.github_font = dpg.add_font("fonts/Roboto-Black.ttf", 38)
             self.medium_font = dpg.add_font("fonts/Roboto-Black.ttf", 20)
+            self.button_font = dpg.add_font("fonts/Roboto-Black.ttf", 14)
             # Font used for status messages (success/warning). Adjust size here.
             self.status_font = dpg.add_font("fonts/Roboto-Black.ttf", 16)
         
         # Color palette - Darker shades
-        self.bg_color = (30, 30, 46, 255)
+        self.bg_color = (21, 2, 29, 1)
         self.fg_color = (219, 219, 219, 255)
         self.accent_color = (200, 60, 60, 255)  # Darker red
         self.secondary_color = (50, 155, 148, 255)  # Darker teal
         self.success_color = (46, 204, 113, 255)
         self.warning_color = (231, 76, 60, 255)
-        self.card_bg = (42, 42, 62, 255)
-        
+        self.card_bg = (22, 11, 32, 255)
+
+        self.headLine = (255, 255, 255, 255)
+        self.buttonAccent = (180, 60, 60, 255)
+        self.buttonAccentSecondary = (100, 100, 100, 255)
+        self.buttonAccentHover = (220, 70, 70, 255)
+        self.buttonAccentSecondaryHover = (130, 130, 130, 255)
+
         # Setup themes
         self.create_themes()
         
@@ -74,7 +82,7 @@ class GitHubStreakGUI:
                 self.show_setup_view()
         
         # Setup viewport
-        dpg.create_viewport(title="🔥 GitHub Streak Tracker", width=920, height=640)
+        dpg.create_viewport(title="🔥 GitHub Streak Tracker", width=920, height=720)
         dpg.setup_dearpygui()
         dpg.show_viewport()
         dpg.set_primary_window("main_window", True)
@@ -158,7 +166,7 @@ class GitHubStreakGUI:
             # Title
             title_text = dpg.add_text("🔥 GitHub Streak Tracker", 
                         color=self.accent_color)
-            dpg.bind_item_font(title_text, self.title_font)
+            dpg.bind_item_font(title_text, self.large_font)
             
             dpg.add_spacer(height=20)
             setup_text = dpg.add_text("Setup", color=self.fg_color)
@@ -224,19 +232,21 @@ class GitHubStreakGUI:
             # Header
             with dpg.group(horizontal=True):
                 header_text = dpg.add_text("GitHub Streak Tracker", color=self.accent_color)
-                dpg.bind_item_font(header_text, self.title_font)
+                dpg.bind_item_font(header_text, self.stat_font)
                 
-                dpg.add_spacer(width=300)
+                dpg.add_spacer(width=250)
                 
                 btn = dpg.add_button(label="Check Now", width=140, height=40,
                                    callback=lambda: threading.Thread(target=self.manual_check, daemon=True).start())
                 dpg.bind_item_theme(btn, self.secondary_button_theme)
+                dpg.bind_item_font(btn, self.button_font)
                 
                 dpg.add_spacer(width=10)
                 
                 btn2 = dpg.add_button(label="Settings", width=140, height=40,
                                     callback=self.show_setup_view)
                 dpg.bind_item_theme(btn2, self.button_theme)
+                dpg.bind_item_font(btn2, self.button_font)
             
             dpg.add_spacer(height=15)
             
@@ -305,9 +315,9 @@ class GitHubStreakGUI:
             dpg.add_spacer(height=10)
             
             # Activity log
-            with dpg.child_window(height=180, border=True):
+            with dpg.child_window(height=200, border=True):
                 log_title = dpg.add_text("Activity Log", color=self.secondary_color)
-                dpg.bind_item_font(log_title, self.medium_font)
+                dpg.bind_item_font(log_title, self.title_font)
                 dpg.add_separator()
                 dpg.add_spacer(height=3)
                 
@@ -320,17 +330,19 @@ class GitHubStreakGUI:
             with dpg.group(horizontal=True):
                 dpg.add_spacer(width=250)
                 
-                btn = dpg.add_button(label="▶ Start Monitoring", tag="start_button",
+                btn = dpg.add_button(label="Start Monitoring", tag="start_button",
                                    width=180, height=45, callback=self.start_monitoring,
                                    enabled=not was_running)
                 dpg.bind_item_theme(btn, self.button_theme)
+                dpg.bind_item_font(btn, self.button_font)
                 
                 dpg.add_spacer(width=20)
                 
-                btn2 = dpg.add_button(label="⏸ Stop Monitoring", tag="stop_button",
+                btn2 = dpg.add_button(label="Stop Monitoring", tag="stop_button",
                                     width=180, height=45, callback=self.stop_monitoring,
                                     enabled=was_running)
                 dpg.bind_item_theme(btn2, self.secondary_button_theme)
+                dpg.bind_item_font(btn2, self.button_font)
         
         # Animate stats on load
         self.animate_stats()
@@ -580,8 +592,9 @@ class GitHubStreakGUI:
         if self.streak_data['commit_history'].get(today):
             self.log("✓ Already committed today!")
             if dpg.does_item_exist("status_message"):
-                dpg.set_value("status_message", "✓ Streak safe for today!")
-                dpg.bind_item_font("status_message", self.medium_font)
+                dpg.set_value("status_message", "Streak safe for today!")
+                dpg.bind_item_theme("status_message", self.success_theme)
+                dpg.bind_item_font("status_message", self.title_font)
             return
         
         has_activity = self.check_github_activity()
@@ -649,7 +662,7 @@ class GitHubStreakGUI:
         if dpg.does_item_exist("stop_button"):
             dpg.configure_item("stop_button", enabled=True)
         
-        self.log("🔥 Monitoring started")
+        self.log("Monitoring started")
         self.log("Checks at: 9:00 AM, 2:00 PM, 8:00 PM")
         
         self.check_thread = threading.Thread(target=self.monitoring_loop, daemon=True)
