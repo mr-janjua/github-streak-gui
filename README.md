@@ -1,5 +1,5 @@
 # GitHub Streak Tracker - GUI Edition 🔥
-
+This application is a continuation of a previous CLI application. Both are connected which means you can use both of them simultaneously and all your activity will stay Synced.
 Beautiful cross-platform desktop app that helps you maintain your GitHub contribution streak with Duolingo-style motivation.
 
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
