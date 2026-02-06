@@ -50,11 +50,46 @@ class GitHubStreakGUI:
         style = ttk.Style()
         style.theme_use('clam')
         
-        style.configure('Title.TLabel', font=('Arial', 24, 'bold'))
-        style.configure('Stat.TLabel', font=('Arial', 36, 'bold'))
-        style.configure('StatLabel.TLabel', font=('Arial', 12))
-        style.configure('Success.TLabel', foreground='#2ecc71', font=('Arial', 14, 'bold'))
-        style.configure('Warning.TLabel', foreground='#e74c3c', font=('Arial', 14, 'bold'))
+        # Color palette
+        bg_color = "#1e1e2e"      # Dark background
+        fg_color = "#dbdbdb"      # Light foreground
+        accent_color = "#ff6b6b"   # Red accent
+        secondary_color = "#4ecdc4" # Teal accent
+        
+        # Configure root window
+        self.root.configure(bg=bg_color)
+        
+        # Configure ttk styles
+        style.configure('TFrame', background=bg_color)
+        style.configure('TLabel', background=bg_color, foreground=fg_color)
+        style.configure('TButton', background=accent_color, foreground=fg_color)
+        style.configure('TLabelframe', background=bg_color, foreground=fg_color)
+        style.configure('TLabelframe.Label', background=bg_color, foreground=fg_color)
+        style.configure('TEntry', fieldbackground="#2a2a3e", foreground=fg_color)
+        style.configure('TRadiobutton', background=bg_color, foreground=fg_color)
+        
+        # Custom label styles
+        style.configure('Title.TLabel', font=('Segoe UI', 28, 'bold'), 
+                       background=bg_color, foreground=accent_color)
+        style.configure('Stat.TLabel', font=('Segoe UI', 40, 'bold'), 
+                       background=bg_color, foreground=secondary_color)
+        style.configure('StatLabel.TLabel', font=('Segoe UI', 13), 
+                       background=bg_color, foreground=fg_color)
+        style.configure('Success.TLabel', foreground='#2ecc71', font=('Segoe UI', 14, 'bold'),
+                       background=bg_color)
+        style.configure('Warning.TLabel', foreground='#e74c3c', font=('Segoe UI', 14, 'bold'),
+                       background=bg_color)
+        
+        # Button styling
+        style.map('TButton',
+                 background=[('active', '#ff5252'), ('pressed', '#ff3333')],
+                 foreground=[('active', '#ffffff')])
+        
+        # Stats frame styling with colored border
+        style.configure('Stats.TLabelframe', background=bg_color, foreground=accent_color,
+                       bordercolor=secondary_color, borderwidth=2, relief='solid')
+        style.configure('Stats.TLabelframe.Label', background=bg_color, foreground=accent_color,
+                       font=('Segoe UI', 12, 'bold'))
         
         self.main_frame = ttk.Frame(self.root, padding="20")
         self.main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -120,7 +155,7 @@ class GitHubStreakGUI:
         ttk.Button(header, text="📊 Check Now", 
                   command=self.manual_check).pack(side=tk.RIGHT, padx=5)
         
-        stats_frame = ttk.LabelFrame(self.main_frame, text="Your Stats", padding="20")
+        stats_frame = ttk.LabelFrame(self.main_frame, text="Your Stats", padding="20", style='Stats.TLabelframe')
         stats_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=10)
         stats_frame.columnconfigure(0, weight=1)
         stats_frame.columnconfigure(1, weight=1)
@@ -166,7 +201,10 @@ class GitHubStreakGUI:
         log_frame.columnconfigure(0, weight=1)
         
         self.log_text = scrolledtext.ScrolledText(log_frame, height=10, width=70, 
-                                                  state='disabled', wrap=tk.WORD)
+                                                  state='disabled', wrap=tk.WORD,
+                                                  bg="#2a2a3e", fg="#e0e0e0",
+                                                  font=('Courier', 10),
+                                                  insertbackground="#e0e0e0")
         self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         control_frame = ttk.Frame(self.main_frame)
