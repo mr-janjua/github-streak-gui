@@ -82,7 +82,7 @@ class GitHubStreakGUI:
                 self.show_setup_view()
         
         # Setup viewport
-        dpg.create_viewport(title="🔥 GitHub Streak Tracker", width=920, height=720)
+        dpg.create_viewport(title="GitHub Streak Tracker. A project by github/mr-janjua", width=920, height=720)
         dpg.setup_dearpygui()
         dpg.show_viewport()
         dpg.set_primary_window("main_window", True)
@@ -110,18 +110,18 @@ class GitHubStreakGUI:
         # Button theme (accent color) - Darker
         with dpg.theme() as self.button_theme:
             with dpg.theme_component(dpg.mvButton):
-                dpg.add_theme_color(dpg.mvThemeCol_Button, self.accent_color, category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (220, 70, 70, 255), category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (180, 50, 50, 255), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_Button, self.buttonAccent, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, self.buttonAccentHover, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.buttonAccentHover, category=dpg.mvThemeCat_Core)
                 dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 5, category=dpg.mvThemeCat_Core)
                 dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 20, 12, category=dpg.mvThemeCat_Core)
         
         # Secondary button theme - Darker
         with dpg.theme() as self.secondary_button_theme:
             with dpg.theme_component(dpg.mvButton):
-                dpg.add_theme_color(dpg.mvThemeCol_Button, self.secondary_color, category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (65, 175, 168, 255), category=dpg.mvThemeCat_Core)
-                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (40, 135, 128, 255), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_Button, self.buttonAccentSecondary, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, self.buttonAccentSecondaryHover, category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, self.buttonAccentSecondaryHover, category=dpg.mvThemeCat_Core)
                 dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 5, category=dpg.mvThemeCat_Core)
                 dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 20, 12, category=dpg.mvThemeCat_Core)
         
@@ -164,8 +164,8 @@ class GitHubStreakGUI:
             dpg.add_spacer(height=30)
             
             # Title
-            title_text = dpg.add_text("🔥 GitHub Streak Tracker", 
-                        color=self.accent_color)
+            title_text = dpg.add_text("GitHub Streak Tracker. A project by github/mr-janjua", 
+                        color=self.headLine)
             dpg.bind_item_font(title_text, self.large_font)
             
             dpg.add_spacer(height=20)
@@ -231,7 +231,7 @@ class GitHubStreakGUI:
             
             # Header
             with dpg.group(horizontal=True):
-                header_text = dpg.add_text("GitHub Streak Tracker", color=self.accent_color)
+                header_text = dpg.add_text("GitHub Streak Tracker", color=self.headLine)
                 dpg.bind_item_font(header_text, self.stat_font)
                 
                 dpg.add_spacer(width=250)
