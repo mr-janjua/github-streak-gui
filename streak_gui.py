@@ -45,7 +45,7 @@ class GitHubStreakGUI:
         # Load default font with larger size for stats
         with dpg.font_registry():
             self.default_font = dpg.add_font("fonts/Roboto-Black.ttf", 13)
-            self.large_font = dpg.add_font("fonts/Roboto-Bold.ttf", 48)
+            self.large_font = dpg.add_font("fonts/Roboto-Bold.ttf", 120,)
             self.title_font = dpg.add_font("fonts/Roboto-Black.ttf", 32)
             self.stat_font = dpg.add_font("fonts/Roboto-Black.ttf", 38)
             self.medium_font = dpg.add_font("fonts/Roboto-Black.ttf", 20)
@@ -220,18 +220,18 @@ class GitHubStreakGUI:
             
             # Header
             with dpg.group(horizontal=True):
-                header_text = dpg.add_text("🔥 GitHub Streak Tracker", color=self.accent_color)
+                header_text = dpg.add_text("GitHub Streak Tracker", color=self.accent_color)
                 dpg.bind_item_font(header_text, self.title_font)
                 
-                dpg.add_spacer(width=100)
+                dpg.add_spacer(width=300)
                 
-                btn = dpg.add_button(label="📊 Check Now", width=140, height=40,
+                btn = dpg.add_button(label="Check Now", width=140, height=40,
                                    callback=lambda: threading.Thread(target=self.manual_check, daemon=True).start())
                 dpg.bind_item_theme(btn, self.secondary_button_theme)
                 
                 dpg.add_spacer(width=10)
                 
-                btn2 = dpg.add_button(label="⚙️ Settings", width=140, height=40,
+                btn2 = dpg.add_button(label="Settings", width=140, height=40,
                                     callback=self.show_setup_view)
                 dpg.bind_item_theme(btn2, self.button_theme)
             
