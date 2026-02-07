@@ -483,7 +483,7 @@ class GitHubStreakGUI:
             dpg.bind_item_theme(btn, self.secondary_button_theme)
     
     def check_github_activity(self):
-        today = datetime.now().date().isoformat()
+        today = datetime.now().date()
         
         headers = {
             'Authorization': f'token {self.token}',
@@ -498,8 +498,12 @@ class GitHubStreakGUI:
             events = response.json()
             
             for event in events:
-                event_date = event['created_at'][:10]
-                if event_date == today:
+                # Parse UTC timestamp from GitHub API and convert to local date
+                event_timestamp = datetime.fromisoformat(event['created_at'].replace('Z', '+00:00'))
+                # Convert UTC to local timezone
+                event_local_date = event_timestamp.astimezone().date()
+                
+                if event_local_date == today:
                     if event['type'] in ['PushEvent', 'PullRequestEvent', 'IssuesEvent', 
                                         'CreateEvent', 'CommitCommentEvent']:
                         return True
@@ -515,28 +519,42 @@ class GitHubStreakGUI:
         last_date = self.streak_data['last_commit_date']
         
         if has_activity:
-            self.streak_data['commit_history'][today] = True
-            
-            if last_date == yesterday or last_date == today:
-                if last_date != today:
+            # Only process if this is the first commit of today
+            if today not in self.streak_data['commit_history']:
+                self.streak_data['commit_history'][today] = True
+                
+                # Increment streak if yesterday was the last commit
+                if last_date == yesterday:
                     self.streak_data['current_streak'] += 1
-            elif last_date is None:
-                self.streak_data['current_streak'] = 1
+                # Start new streak if no previous commits or gap
+                elif last_date is None:
+                    self.streak_data['current_streak'] = 1
+                else:
+                    # There was a gap - reset streak to 1
+                    self.streak_data['current_streak'] = 1
+                
+                # Update last commit date
+                self.streak_data['last_commit_date'] = today
+                
+                # Update longest streak if needed
+                if self.streak_data['current_streak'] > self.streak_data['longest_streak']:
+                    self.streak_data['longest_streak'] = self.streak_data['current_streak']
+                
+                # Update total days
+                self.streak_data['total_days'] = len(self.streak_data['commit_history'])
+                
+                self.save_streak_data()
+                return True
             else:
-                self.streak_data['current_streak'] = 1
-            
-            self.streak_data['last_commit_date'] = today
-            
-            if self.streak_data['current_streak'] > self.streak_data['longest_streak']:
-                self.streak_data['longest_streak'] = self.streak_data['current_streak']
-            
-            self.streak_data['total_days'] = len(self.streak_data['commit_history'])
-            self.save_streak_data()
-            return True
+                # Already committed today - no change needed
+                return True
         else:
+            # No activity today
             if last_date == yesterday:
+                # Streak at risk but not broken yet
                 return False
             elif last_date != today:
+                # Streak broken - reset to 0
                 self.streak_data['current_streak'] = 0
                 self.save_streak_data()
             return False
